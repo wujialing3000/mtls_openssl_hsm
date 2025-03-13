@@ -1,0 +1,52 @@
+
+git clone https://github.com/openssl/openssl.git
+git checkout openssl-3.1
+
+
+sudo apt update
+sudo apt install build-essential perl
+
+
+// 编译 openssl
+./Configure linux-x86_64 --prefix=/usr/local/openssl-custom --openssldir=/usr/local/openssl-custom
+make -j$(nproc)
+sudo make install
+
+
+mkdir -p ~/providers/myprovider
+cd ~/providers/myprovider
+
+// 编译provider
+gcc -fPIC -shared -o myprovider.so myprovider.c -I/usr/local/openssl-custom/include -L/usr/local/openssl-custom/lib64 -lcrypto
+
+// 测试加载 Provider
+OPENSSL_MODULES=/home/wu/ssl/openssl/providers /usr/local/openssl-custom/bin/openssl list -providers
+
+// 单独这一条实际上也可以
+/usr/local/openssl-custom/bin/openssl list -providers
+
+// 手动加载 Provider
+export OPENSSL_MODULES=/home/wu/ssl/provider/
+/usr/local/openssl-custom/bin/openssl list -providers -provider myprovider
+
+
+[provider_sect]
+default = default_sect
+my_provider = my_provider_sect
+
+[my_provider_sect]
+module = /home/wu/ssl/provider/myprovider.so
+
+
+ldd /home/wu/ssl/provider/myprovider.so
+如果 ldd 输出中有 not found，表示你的 my_provider.so 依赖的库没有找到，
+需要确保 OpenSSL 的 libcrypto 在 LD_LIBRARY_PATH 中，例如：
+
+export LD_LIBRARY_PATH=/usr/local/openssl-custom/lib:$LD_LIBRARY_PATH
+然后重新运行 openssl list -providers。
+
+
+
+OPENSSL_CONF=/usr/local/openssl-custom/openssl.cnf OPENSSL_MODULES=/home/wu/ssl/provider /usr/local/openssl-custom/bin/openssl list -providers
+
+
