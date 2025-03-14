@@ -7,11 +7,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static OSSL_FUNC_provider_gettable_params_fn 	provider_gettable_params;
-static OSSL_FUNC_provider_get_params_fn 		provider_get_params;
-static OSSL_FUNC_rand_newctx_fn 				my_rand_newctx;
-static OSSL_FUNC_rand_freectx_fn 				my_rand_freectx;
-static OSSL_FUNC_rand_generate_fn 				my_rand_generate;
+static OSSL_FUNC_provider_gettable_params_fn    provider_gettable_params;
+static OSSL_FUNC_provider_get_params_fn         provider_get_params;
+static OSSL_FUNC_rand_newctx_fn                 _rand_newctx;
+static OSSL_FUNC_rand_freectx_fn                _rand_freectx;
+static OSSL_FUNC_rand_generate_fn               _rand_generate;
 
 
 
@@ -29,21 +29,31 @@ static const OSSL_PARAM provider_params[] = {
 
 // 获取可查询的参数
 static const OSSL_PARAM *provider_gettable_params(void *provctx) {
+    printf("provider_get_table_params\n");
     return provider_params;
 }
 
 
 // 实际获取参数值,这里入口参数改为如下
-static int provider_get_params(void *provctx, struct ossl_param_st *params) {
+static int provider_get_params(void *provctx, OSSL_PARAM *params) {
     OSSL_PARAM *p;
-    for (p = params; p->key != NULL; p++) {
-        if (strcmp(p->key, OSSL_PROV_PARAM_NAME) == 0)
-            OSSL_PARAM_set_utf8_string(p, "My OpenSSL Provider");
-        else if (strcmp(p->key, OSSL_PROV_PARAM_VERSION) == 0)
-            OSSL_PARAM_set_utf8_string(p, "1.0");
-        else if (strcmp(p->key, OSSL_PROV_PARAM_BUILDINFO) == 0)
-            OSSL_PARAM_set_utf8_string(p, "Built with OpenSSL 3.0");
-    }
+    
+    printf("provider_get_params\n");
+
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "My OpenSSL Provider"))
+        return 0;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_VERSION);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_VERSION_STR))
+        return 0;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_BUILDINFO);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_FULL_VERSION_STR))
+        return 0;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_STATUS);
+    if (p != NULL && !OSSL_PARAM_set_int(p, 1)) //ossl_prov_is_running()
+        return 0;
+
+     
     return 1;
 }
 
@@ -71,8 +81,8 @@ static int _rand_generate(void *vctx, unsigned char *out, size_t outlen,
 
 // 随机数算法功能数组
 static const OSSL_DISPATCH my_rand_functions[] = {
-    { OSSL_FUNC_RAND_NEWCTX, (void (*)(void))_rand_newctx },
-    { OSSL_FUNC_RAND_FREECTX, (void (*)(void))_rand_freectx },
+    { OSSL_FUNC_RAND_NEWCTX,   (void (*)(void))_rand_newctx },
+    { OSSL_FUNC_RAND_FREECTX,  (void (*)(void))_rand_freectx },
     { OSSL_FUNC_RAND_GENERATE, (void (*)(void))_rand_generate },
     { 0, NULL }
 };
@@ -95,7 +105,7 @@ static const OSSL_ALGORITHM *provider_query(void *provctx, int operation_id, int
 
 // Provider 卸载函数
 static void provider_teardown(void *provctx) {
-    printf("Provider is being unloaded.\n");
+    printf("Provider is being unloaded.1\n");
 }
 
 // verify
@@ -150,16 +160,16 @@ int my_decoder_decode(void *ctx, OSSL_CORE_BIO *in, int selection,
 }
 // Provider 调度表
 static const OSSL_DISPATCH provider_dispatch[] = {
-    { OSSL_FUNC_PROVIDER_QUERY_OPERATION, 	(void (*)(void))provider_query },
-    { OSSL_FUNC_PROVIDER_GETTABLE_PARAMS, 	(void (*)(void))provider_gettable_params },
-    { OSSL_FUNC_PROVIDER_GET_PARAMS, 		(void (*)(void))provider_get_params },
-    { OSSL_FUNC_PROVIDER_TEARDOWN, 			(void (*)(void))provider_teardown },
-	
-	{OSSL_FUNC_SIGNATURE_VERIFY, 			(void (*)(void))my_signature_verify},
-    {OSSL_FUNC_RAND_GENERATE,    			(void (*)(void))my_rand_generate},
-	{OSSL_FUNC_ENCODER_ENCODE,				(void (*)(void))my_encoder_encode},
-	{OSSL_FUNC_DECODER_DECODE,				(void (*)(void))my_decoder_decode},
-
+    { OSSL_FUNC_PROVIDER_QUERY_OPERATION,   (void (*)(void))provider_query },
+    { OSSL_FUNC_PROVIDER_GETTABLE_PARAMS,   (void (*)(void))provider_gettable_params },
+    { OSSL_FUNC_PROVIDER_GET_PARAMS,        (void (*)(void))provider_get_params },
+    { OSSL_FUNC_PROVIDER_TEARDOWN,          (void (*)(void))provider_teardown },
+    
+    {OSSL_FUNC_SIGNATURE_VERIFY,            (void (*)(void))my_signature_verify},
+    {OSSL_FUNC_RAND_GENERATE,               (void (*)(void))my_rand_generate},
+    {OSSL_FUNC_ENCODER_ENCODE,              (void (*)(void))my_encoder_encode},
+    {OSSL_FUNC_DECODER_DECODE,              (void (*)(void))my_decoder_decode},
+    
     { 0, NULL }
 };
 
