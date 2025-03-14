@@ -187,3 +187,38 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
 }
 
 
+
+#include <stdio.h>
+#include <openssl/provider.h>
+#include <openssl/rand.h>
+
+int main() {
+
+    const int key_len = 16;
+    unsigned char key[key_len];
+    
+    OSSL_PROVIDER *provider = OSSL_PROVIDER_load(0, "myprovider");
+    
+    if (!provider) {
+        printf("failed to load provider!\n");
+    } else {
+    	printf("finished to load provider!\n");
+    }
+   
+    if (RAND_bytes(key,sizeof(key)) != 1) {
+    	fprintf(stderr, "error ger rand bytes.\n");
+    	return 1;
+    }
+
+    printf("generated random key:\n");
+    for (int i = 0; i < key_len; i++) {
+        printf("%02x", key[i]);
+    }
+    printf("\n");
+    
+    OSSL_PROVIDER_unload(provider);
+    
+    return 0;
+}
+
+
