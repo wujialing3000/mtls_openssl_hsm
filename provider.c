@@ -7,11 +7,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static OSSL_FUNC_provider_gettable_params_fn provider_gettable_params;
-static OSSL_FUNC_provider_get_params_fn provider_get_params;
-static OSSL_FUNC_rand_newctx_fn my_rand_newctx;
-static OSSL_FUNC_rand_freectx_fn my_rand_freectx;
-static OSSL_FUNC_rand_generate_fn my_rand_generate;
+static OSSL_FUNC_provider_gettable_params_fn 	provider_gettable_params;
+static OSSL_FUNC_provider_get_params_fn 		provider_get_params;
+static OSSL_FUNC_rand_newctx_fn 				my_rand_newctx;
+static OSSL_FUNC_rand_freectx_fn 				my_rand_freectx;
+static OSSL_FUNC_rand_generate_fn 				my_rand_generate;
+
 
 
 typedef struct {
@@ -47,7 +48,7 @@ static int provider_get_params(void *provctx, struct ossl_param_st *params) {
 }
 
 // 随机数生成部分
-static void *my_rand_newctx(void *provctx, void *parent, const OSSL_DISPATCH *parent_dispatch) {
+static void *_rand_newctx(void *provctx, void *parent, const OSSL_DISPATCH *parent_dispatch) {
     MY_RAND_CTX *ctx = OPENSSL_zalloc(sizeof(MY_RAND_CTX));
     if (ctx) {
         ctx->strength = 256; // 默认强度
@@ -55,11 +56,11 @@ static void *my_rand_newctx(void *provctx, void *parent, const OSSL_DISPATCH *pa
     return ctx;
 }
 
-static void my_rand_freectx(void *vctx) {
+static void _rand_freectx(void *vctx) {
     OPENSSL_free(vctx);
 }
 
-static int my_rand_generate(void *vctx, unsigned char *out, size_t outlen,
+static int _rand_generate(void *vctx, unsigned char *out, size_t outlen,
                             unsigned int strength, int prediction_resistance,
                             const unsigned char *addin, size_t addin_len) {
     for (size_t i = 0; i < outlen; i++) {
@@ -70,9 +71,9 @@ static int my_rand_generate(void *vctx, unsigned char *out, size_t outlen,
 
 // 随机数算法功能数组
 static const OSSL_DISPATCH my_rand_functions[] = {
-    { OSSL_FUNC_RAND_NEWCTX, (void (*)(void))my_rand_newctx },
-    { OSSL_FUNC_RAND_FREECTX, (void (*)(void))my_rand_freectx },
-    { OSSL_FUNC_RAND_GENERATE, (void (*)(void))my_rand_generate },
+    { OSSL_FUNC_RAND_NEWCTX, (void (*)(void))_rand_newctx },
+    { OSSL_FUNC_RAND_FREECTX, (void (*)(void))_rand_freectx },
+    { OSSL_FUNC_RAND_GENERATE, (void (*)(void))_rand_generate },
     { 0, NULL }
 };
 
@@ -97,12 +98,68 @@ static void provider_teardown(void *provctx) {
     printf("Provider is being unloaded.\n");
 }
 
+// verify
+static int my_verify(void *ctx, const unsigned char *sig, size_t siglen,
+                     const unsigned char *data, size_t datalen) {
+
+    printf("verify ok!!!!\n");
+    return 1;
+}
+// 签名验证函数实现
+static int my_signature_verify(void *ctx, const unsigned char *sig, size_t sig_len,
+                               const unsigned char *tbs, size_t tbs_len)
+{
+	printf("verify ok!!!!\n");
+    // 使用 OpenSSL 的 RSA_verify 函数验证签名
+    //int result = RSA_verify(NID_sha256, tbs, tbs_len, sig, sig_len, rsa);  
+    return 1; // 返回 1 表示成功，0 表示失败
+}
+
+// 随机数生成函数实现
+static int my_rand_generate(void *vctx, unsigned char *out, size_t outlen,
+                            unsigned int strength, int prediction_resistance,
+                            const unsigned char *addin, size_t addin_len)
+{
+    if (out == NULL || outlen == 0) {
+        return 0; // 参数错误
+    }
+    // 简单的随机数生成，实际应用中应使用更安全的方法
+    for (size_t i = 0; i < outlen; i++) {
+        out[i] = (unsigned char)(rand() % 256);
+    }
+	printf("rand generate ok!!!!\n");
+	
+    return 1; // 成功
+}
+// 加密
+int my_encoder_encode(void *ctx, OSSL_CORE_BIO *out,
+                     const void *obj_raw, const OSSL_PARAM obj_abstract[],
+                     int selection,
+                     OSSL_PASSPHRASE_CALLBACK *cb, void *cbarg)
+{
+	printf("encode ok!!!!\n");
+	return 1;
+}
+// 解密
+int my_decoder_decode(void *ctx, OSSL_CORE_BIO *in, int selection,
+                     OSSL_CALLBACK *data_cb, void *data_cbarg,
+                     OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg)
+{
+	printf("decode ok!!!\n");
+	return 1;
+}
 // Provider 调度表
 static const OSSL_DISPATCH provider_dispatch[] = {
-    { OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))provider_query },
-    { OSSL_FUNC_PROVIDER_GETTABLE_PARAMS, (void (*)(void))provider_gettable_params },
-    { OSSL_FUNC_PROVIDER_GET_PARAMS, (void (*)(void))provider_get_params },
-    { OSSL_FUNC_PROVIDER_TEARDOWN, (void (*)(void))provider_teardown },
+    { OSSL_FUNC_PROVIDER_QUERY_OPERATION, 	(void (*)(void))provider_query },
+    { OSSL_FUNC_PROVIDER_GETTABLE_PARAMS, 	(void (*)(void))provider_gettable_params },
+    { OSSL_FUNC_PROVIDER_GET_PARAMS, 		(void (*)(void))provider_get_params },
+    { OSSL_FUNC_PROVIDER_TEARDOWN, 			(void (*)(void))provider_teardown },
+	
+	{OSSL_FUNC_SIGNATURE_VERIFY, 			(void (*)(void))my_signature_verify},
+    {OSSL_FUNC_RAND_GENERATE,    			(void (*)(void))my_rand_generate},
+	{OSSL_FUNC_ENCODER_ENCODE,				(void (*)(void))my_encoder_encode},
+	{OSSL_FUNC_DECODER_DECODE,				(void (*)(void))my_decoder_decode},
+
     { 0, NULL }
 };
 
